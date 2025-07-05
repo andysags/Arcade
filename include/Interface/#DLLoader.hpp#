@@ -1,0 +1,47 @@
+/*
+** EPITECH PROJECT, 2024
+** B-OOP-400-COT-4-1-arcade-andy.sagbo
+** File description:
+** DLLoader.hpp
+*/
+
+#ifndef DLLOADER_HPP
+    #define DLLOADER_HPP
+    #include <iostream>
+    #include <dlfcn.h>
+    #include <stdexcept>
+    #include "Error.hpp"
+
+using namespace std;
+
+template <typename T>   
+class PluginManager {
+private:
+    void *handle;
+    T *(*createFunc)();
+    void (*destroyFunc)(T *);
+
+public:
+    PluginManager(const std::string &libPath) : handle(nullptr), createFunc(nullptr), destroyFunc(nullptr) {
+        handle = dlopen(libPath.c_str(), RTLD_LAZY);
+        createFunc = (T *(*)()) dlsym(handle, "create");
+        destroyFunc = (void (*)(T *)) dlsym(handle, "destroy");
+        // cout << "azertyu\n";
+    }
+
+    ~PluginManager() {
+        if (handle) {
+            dlclose(handle);
+        }
+    }
+
+    T *getInstance() {
+        return createFunc();
+    }
+
+    void destroyInstance(T *instance) {
+        destroyFunc(instance);
+    }
+};
+
+#endif
