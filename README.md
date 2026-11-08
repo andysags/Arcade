@@ -1,50 +1,68 @@
-# Documentation Complète - Projet Arcade
+🇬🇧 English | 🇫🇷 [Français](README.fr.md)
 
-## Table des Matières
-1. [Vue d'ensemble](#vue-densemble)
-2. [Architecture du Projet](#architecture-du-projet)
-3. [Interfaces](#interfaces)
-4. [Bibliothèques Graphiques](#bibliothèques-graphiques)
-5. [Jeux Implémentés](#jeux-implémentés)
-6. [Système de Chargement Dynamique](#système-de-chargement-dynamique)
-7. [Gestion des Scores](#gestion-des-scores)
-8. [Compilation et Utilisation](#compilation-et-utilisation)
-9. [Structure des Fichiers](#structure-des-fichiers)
+# Arcade
 
-## Vue d'ensemble
+> A modular C++ gaming platform that loads games and graphics back-ends as shared libraries at runtime, so you can switch renderer (SFML, SDL2, NCurses) without restarting.
 
-Le projet Arcade est une plateforme de jeux modulaire développée en C++ qui permet de jouer à différents jeux avec différentes bibliothèques graphiques. Le système utilise un chargement dynamique de bibliothèques pour permettre le changement de rendu graphique et de jeux en temps réel.
+![C++20](https://img.shields.io/badge/C%2B%2B-20-00599C?logo=cplusplus&logoColor=white)
+![SFML](https://img.shields.io/badge/SFML-8CC445?logo=sfml&logoColor=white)
+![SDL2](https://img.shields.io/badge/SDL2-1B1F3B)
+![NCurses](https://img.shields.io/badge/NCurses-terminal-4EAA25)
+![Make](https://img.shields.io/badge/build-Make-427819?logo=gnu&logoColor=white)
+![Linux](https://img.shields.io/badge/platform-Linux-FCC624?logo=linux&logoColor=black)
 
-### Fonctionnalités principales :
-- Support de 3 bibliothèques graphiques : SFML, SDL2, NCurses
-- 2 jeux implémentés : Snake et Nibbler
-- Chargement dynamique des modules
-- Système de scores persistant
-- Interface utilisateur avec menu de navigation
+## About
 
-## Architecture du Projet
+Arcade is an Epitech object-oriented programming project (B-OOP-400). The goal is to separate game logic from rendering completely: a core program loads **graphics libraries** and **game libraries** as `.so` plugins through `dlopen`, and both sides talk only through abstract C++ interfaces. Any game runs on any renderer, and you can swap the renderer while the program is running.
 
-Le projet suit une architecture modulaire basée sur des interfaces abstraites :
+The original project specification is in [`doc/B-OOP-400_arcade.pdf`](doc/B-OOP-400_arcade.pdf), and extra documentation is in [`doc/Documentation.pdf`](doc/Documentation.pdf).
 
+<!-- TODO: add screenshot -->
+
+## Key features
+
+- **3 graphics back-ends**, each compiled as its own shared library: SFML, SDL2 and NCurses (terminal).
+- **2 games**, also compiled as shared libraries: Snake and Nibbler.
+- **Runtime plugin loading** with a generic `DLLoader<T>` template built on `dlopen` / `dlsym`.
+- **Hot-swap of the renderer** with `F2` / `F3`, from the main menu.
+- **Persistent scores**: each finished game appends `game  player  score` to a `Score` file, shown in the main menu.
+- **Text-file maps** (`resources/snake.txt`, `resources/nibbler.txt`) using `#` for walls and `o` for food.
+- **Pause, reset and a 200-tick timer** in each game.
+
+## Tech stack
+
+| Area | Technology |
+|------|------------|
+| Language | C++20 (`g++`, `-Wall -Wextra -Werror -fPIC`) |
+| Graphics | SFML (graphics, window, system, audio), SDL2 + SDL2_image + SDL2_ttf, NCurses |
+| Plugin loading | POSIX `dlfcn.h` (`dlopen`, `dlsym`, `dlclose`) |
+| Build | GNU Make |
+
+## Notable technical choices
+
+- **Interface-driven design.** `IGraphic` (rendering + input) and `IGame` (game logic) are pure abstract classes. The core (`IDisplay`) only knows these interfaces.
+- **C entry points for plugins.** Every library exports `extern "C"` `create()` and `destroy()` functions, so the core loads them by symbol name without C++ name mangling.
+- **Back-end-neutral input.** Each renderer converts its native key events into a shared `IDisplay` key enum (`UP_KEY`, `F1_KEY`, `TWO`, ...), so games never depend on a graphics library.
+- **Sprite fallback for the terminal.** Games ask for image paths such as `resources/assets/wall.png`; the NCurses back-end maps them to characters (`wall` → `#`, `player` → `@`, `apple` → `o`).
+
+## Architecture
+
+```mermaid
+flowchart LR
+    main["main.cpp<br/>checks argument"] --> core["IDisplay (core)<br/>menu, game loop, scores"]
+    core -- "DLLoader&lt;IGraphic&gt;" --> gfx["IGraphic"]
+    core -- "DLLoader&lt;IGame&gt;" --> game["IGame"]
+    gfx --> sfml["arcade_sfml.so"]
+    gfx --> sdl["arcade_sdl2.so"]
+    gfx --> nc["arcade_ncurses.so"]
+    game --> snake["arcade_snake.so"]
+    game --> nib["arcade_nibbler.so"]
+    core --> score[("Score file")]
 ```
-Arcade Core
-├── IDisplay (Gestionnaire principal)
-├── IGraphic (Interface graphique)
-│   ├── SFML
-│   ├── SDL2
-│   └── NCurses
-└── IGame (Interface jeux)
-    ├── Snake
-    └── Nibbler
-```
 
-## Interfaces
+### Interfaces
 
-### IGraphic (Interface Graphique)
-
-**Fichier :** `include/Interface/IGraphic.hpp`
-
-Interface abstraite définissant les méthodes communes à toutes les bibliothèques graphiques :
+`include/Interface/IGraphic.hpp`
 
 ```cpp
 class IGraphic {
@@ -58,17 +76,13 @@ public:
     virtual int getInput() = 0;
     virtual bool isOpen() const = 0;
     virtual void close() = 0;
-    virtual int *showMenu(const std::vector<std::string>& gameList, 
-                         const std::vector<std::string>& gamelib, 
-                         int scr1, int scr2) = 0;
+    virtual int *showMenu(const std::vector<std::string>& gameList,
+                          const std::vector<std::string>& gamelib,
+                          int scr1, int scr2) = 0;
 };
 ```
 
-### IGame (Interface Jeux)
-
-**Fichier :** `include/Interface/IGames.hpp`
-
-Interface abstraite pour tous les jeux :
+`include/Interface/IGames.hpp`
 
 ```cpp
 class IGame {
@@ -81,331 +95,131 @@ public:
     virtual bool isGameOver() const = 0;
     virtual void reset() = 0;
     virtual int game(IGraphic *module, int *bestscore) = 0;
-    virtual std::string getGameName() const = 0;
+    virtual const char *getGameName() const = 0;
     virtual int getScore() const = 0;
 };
 ```
 
-### IDisplay (Gestionnaire Principal)
+### Graphics back-ends
 
-**Fichier :** `include/Interface/IDisplay.hpp`
+| Library | Source | Window |
+|---------|--------|--------|
+| `arcade_sfml.so` | `src/SFML/sfml.cpp` | 1920x1080, `resources/font.ttf` for text |
+| `arcade_sdl2.so` | `src/SDL/sdl.cpp` | 800x600, hardware-accelerated renderer, SDL_ttf + SDL_image |
+| `arcade_ncurses.so` | `src/ncurses/ncurses.cpp` | Terminal, sprites drawn as ASCII characters |
 
-Classe principale qui gère l'interface utilisateur, le chargement des modules et la coordination entre les jeux et les bibliothèques graphiques.
+### Games
 
-**Fonctionnalités :**
-- Affichage du menu principal
-- Gestion des entrées utilisateur
-- Chargement dynamique des bibliothèques
-- Coordination jeu/graphique
+| Game | Rules (from the source) |
+|------|-------------------------|
+| **Snake** | The snake grows and scores +10 per apple. Hitting a wall or itself ends the game. Eating every apple also ends the game. |
+| **Nibbler** | Same movement and scoring as Snake, but hitting a wall turns the snake instead of ending the game. |
 
-## Bibliothèques Graphiques
+## Getting started
 
-### 1. SFML
+### Prerequisites
 
-**Fichiers :** `include/Graphics/sfml.hpp`, `src/SFML/sfml.cpp`
+- Linux (the loader uses `dlfcn.h`)
+- `g++` with C++20 support and `make`
+- Development packages for **all three** graphics libraries. The `arcade` binary links against SFML, SDL2 and NCurses, so you need all of them even if you only use one back-end:
+  - SFML (`sfml-graphics`, `sfml-window`, `sfml-system`, `sfml-audio`)
+  - SDL2, SDL2_image, SDL2_ttf
+  - NCurses
 
-**Caractéristiques :**
-- Fenêtre 1920x1080
-- Support des textures et polices
-- Gestion complète des événements clavier
-- Rendu 2D optimisé
+For example, on Debian/Ubuntu:
 
-**Initialisation :**
-```cpp
-void Sfml::init() {
-    _window = new sf::RenderWindow(sf::VideoMode(1920, 1080), "Arcade-SFML");
-    _font = new sf::Font();
-    _font->loadFromFile("resources/font.ttf");
-}
-```
-
-### 2. SDL2
-
-**Fichiers :** `include/Graphics/sdl.hpp`, `src/SDL/sdl.cpp`
-
-**Caractéristiques :**
-- Fenêtre 1920x1080
-- Support SDL_TTF pour le texte
-- Support SDL_Image pour les sprites
-- Rendu accéléré matériellement
-
-**Initialisation :**
-```cpp
-void Sdl::init() {
-    SDL_Init(SDL_INIT_EVERYTHING);
-    _window = SDL_CreateWindow("Arcade-SDL2", SDL_WINDOWPOS_CENTERED, 
-                              SDL_WINDOWPOS_CENTERED, 1920, 1080, SDL_WINDOW_SHOWN);
-    _renderer = SDL_CreateRenderer(_window, -1, SDL_RENDERER_ACCELERATED);
-}
-```
-
-### 3. NCurses
-
-**Fichiers :** `include/Graphics/ncurses.hpp`, `src/ncurses/ncurses.cpp`
-
-**Caractéristiques :**
-- Interface textuelle en terminal
-- Mapping des sprites vers des caractères ASCII
-- Gestion des entrées clavier
-- Affichage optimisé pour le terminal
-
-**Mapping des sprites :**
-- Mur (`wall`) → `#`
-- Joueur (`player`) → `@`
-- Pomme (`apple`) → `o`
-
-## Jeux Implémentés
-
-### 1. Snake
-
-**Fichiers :** `include/Games/snake.hpp`, `src/games/snake.cpp`
-
-**Gameplay :**
-- Serpent qui grandit en mangeant des pommes
-- Collision avec les murs = Game Over
-- Collision avec soi-même = Game Over
-- Score : +10 points par pomme
-
-**Contrôles :**
-- Pavé numérique : 2 (bas), 4 (gauche), 6 (droite), 8 (haut)
-
-**Structure de données :**
-```cpp
-typedef struct pos {
-    int x;
-    int y;
-} pos;
-pos snake[100];  // Corps du serpent
-int snakeSize;   // Taille actuelle
-int direction;   // Direction courante
-```
-
-### 2. Nibbler
-
-**Fichiers :** `include/Games/nibbler.hpp`, `src/games/nibbler.cpp`
-
-**Gameplay :**
-- Similaire à Snake mais avec rebond sur les murs
-- Le serpent change de direction en touchant un mur
-- Objectif : manger toutes les pommes
-
-**Différences avec Snake :**
-- Pas de Game Over sur collision mur
-- Rotation automatique de direction
-- Logique de rebond implémentée
-
-## Système de Chargement Dynamique
-
-### DLLoader
-
-**Fichier :** `include/Interface/DLLoader.hpp`
-
-Template générique pour le chargement dynamique de bibliothèques :
-
-```cpp
-template <typename T>   
-class DLLoader {
-private:
-    void *handle;
-    T *(*createFunc)();
-    void (*destroyFunc)(T *);
-
-public:
-    DLLoader(const std::string &libPath);
-    ~DLLoader();
-    T *getInstance();
-    void destroyInstance(T *instance);
-};
-```
-
-**Utilisation :**
-```cpp
-// Chargement d'une bibliothèque graphique
-DLLoader<IGraphic> loader("./lib/arcade_sfml.so");
-IGraphic *module = loader.getInstance();
-
-// Chargement d'un jeu
-DLLoader<IGame> gameLoader("./lib/arcade_snake.so");
-IGame *game = gameLoader.getInstance();
-```
-
-### Bibliothèques Compilées
-
-Les modules sont compilés en bibliothèques partagées :
-- `lib/arcade_sfml.so`
-- `lib/arcade_sdl2.so`
-- `lib/arcade_ncurses.so`
-- `lib/arcade_snake.so`
-- `lib/arcade_nibbler.so`
-
-## Gestion des Scores
-
-### ScoreManager
-
-**Fichier :** `include/Interface/ScoreManager.hpp`
-
-**Fonctionnalités :**
-- Sauvegarde persistante dans le fichier "Score"
-- Format : `NomJeu NomJoueur Score`
-- Affichage dans le menu principal
-
-```cpp
-class ScoreManager {
-public:
-    void saveScore(const std::string &gameName, 
-                  const std::string &playerName, 
-                  int score);
-};
-```
-
-## Compilation et Utilisation
-
-### Makefile
-
-**Cibles principales :**
-```makefile
-all: core graphicals games
-core: $(NAME)                    # Exécutable principal
-graphicals: $(GRAPHICAL_LIBS)    # Bibliothèques graphiques
-games: $(GAME_LIBS)              # Bibliothèques de jeux
-```
-
-**Compilation :**
 ```bash
-make all
+sudo apt install g++ make libsfml-dev libsdl2-dev libsdl2-image-dev libsdl2-ttf-dev libncurses-dev
 ```
 
-**Flags de compilation :**
-- `-Wall -Wextra -Werror -std=c++20 -fPIC`
-- SFML : `-lsfml-graphics -lsfml-audio -lsfml-window -lsfml-system`
-- SDL2 : `-lSDL2 -lSDL2_image -lSDL2_ttf -lSDL2_mixer`
-- NCurses : `-lncurses`
+### Build
 
-### Utilisation
-
-**Lancement :**
 ```bash
-./arcade <library_path>
+make            # builds the core, the graphics libraries and the game libraries
 ```
 
-**Exemples :**
+| Target | Output |
+|--------|--------|
+| `make core` | `./arcade` executable |
+| `make graphicals` | `lib/arcade_sfml.so`, `lib/arcade_sdl2.so`, `lib/arcade_ncurses.so` |
+| `make games` | `lib/arcade_snake.so`, `lib/arcade_nibbler.so` |
+| `make clean` | Removes object files |
+| `make fclean` | Also removes the executable and the `.so` files |
+| `make re` | `fclean` then `all` |
+
+### Run
+
+Run from the repository root: assets, maps and the `Score` file use relative paths.
+
 ```bash
 ./arcade ./lib/arcade_sfml.so
 ./arcade ./lib/arcade_sdl2.so
 ./arcade ./lib/arcade_ncurses.so
 ```
 
-**Contrôles en jeu :**
-- `F1` : Quitter le jeu
-- `F2/F3` : Changer de bibliothèque graphique
-- `F6/F7` : Changer de jeu
-- `P` : Pause
-- `R` : Reset
-- `Esc` : Fermer l'application
+The argument must be one of these three exact paths; otherwise the program prints the available libraries and exits with code `84`.
 
-## Structure des Fichiers
+## Usage
+
+1. At startup, type your player name in the terminal (`Entrez votre nom de joueur:`).
+2. The main menu opens in the chosen back-end. It lists the graphics libraries, the games and the saved scores.
+3. Pick a game, press `Enter` to play.
+
+### Controls
+
+| Context | Key | Action |
+|---------|-----|--------|
+| Menu | `F6` / `F7` | Switch the selected game (Snake / Nibbler) |
+| Menu | `Enter` | Start the selected game |
+| Menu | `F2` / `F3` | Next / previous graphics library |
+| In game | `8` / `2` / `4` / `6` (numpad in SFML and SDL2) | Up / down / left / right |
+| In game | `P` | Pause / resume |
+| In game | `R` | Reset the game and the timer |
+| In game | `F1` | Back to the menu |
+| Anywhere | `Esc` | Close the window |
+
+A game ends on game over, on `F1`, or when the 200-tick timer reaches zero. The score is then appended to `Score`.
+
+## Project structure
 
 ```
-B-OOP-400-COT-4-1-arcade-andy.sagbo-main/
-├── Makefile                    # Configuration de compilation
-├── README.md                   # Informations de base
-├── doc/                        # Documentation
-│   ├── B-OOP-400_arcade.pdf   # Spécifications du projet
-│   └── Documentation Arcade.pdf
-├── include/                    # Fichiers d'en-tête
-│   ├── Games/
-│   │   ├── nibbler.hpp
-│   │   └── snake.hpp
-│   ├── Graphics/
-│   │   ├── ncurses.hpp
-│   │   ├── sdl.hpp
-│   │   └── sfml.hpp
-│   └── Interface/
-│       ├── DLLoader.hpp        # Chargement dynamique
-│       ├── Error.hpp           # Gestion d'erreurs
-│       ├── IDisplay.hpp        # Interface principale
-│       ├── IGames.hpp          # Interface jeux
-│       ├── IGraphic.hpp        # Interface graphique
-│       └── ScoreManager.hpp    # Gestion des scores
-├── lib/                        # Bibliothèques compilées
-│   └── lib_arcade
-├── resources/                  # Ressources du jeu
-│   ├── assets/                 # Images et sprites
-│   │   ├── apple.png
-│   │   ├── arcade.png
-│   │   ├── background.png
-│   │   ├── ground.png
-│   │   ├── image_arcade.png
-│   │   ├── player.png
-│   │   └── wall.png
-│   ├── font.ttf               # Police de caractères
-│   ├── nibbler.txt            # Carte Nibbler
-│   └── snake.txt              # Carte Snake
-└── src/                       # Code source
-    ├── IDisplay.cpp           # Implémentation principale
-    ├── main.cpp               # Point d'entrée
-    ├── SDL/
-    │   └── sdl.cpp
-    ├── SFML/
-    │   └── sfml.cpp
-    ├── games/
-    │   ├── nibbler.cpp
-    │   └── snake.cpp
-    └── ncurses/
-        └── ncurses.cpp
+Arcade/
+├── Makefile
+├── doc/                     # Project specification and documentation (PDF)
+├── include/
+│   ├── Games/               # snake.hpp, nibbler.hpp
+│   ├── Graphics/            # sfml.hpp, sdl.hpp, ncurses.hpp
+│   └── Interface/           # IGraphic, IGames, IDisplay, DLLoader, Error, ScoreManager
+├── lib/                     # Output directory for the .so plugins
+├── resources/
+│   ├── assets/              # Sprites and backgrounds (PNG/BMP)
+│   ├── font.ttf
+│   ├── snake.txt            # Snake map
+│   └── nibbler.txt          # Nibbler map
+└── src/
+    ├── main.cpp             # Entry point and argument check
+    ├── IDisplay.cpp         # Core: menu, game loop, score file
+    ├── SFML/  SDL/  ncurses/
+    └── games/               # snake.cpp, nibbler.cpp
 ```
 
-## Gestion des Erreurs
+## Adding a library
 
-### Classe Error
-
-**Fichier :** `include/Interface/Error.hpp`
-
-Classe d'exception personnalisée héritant de `std::exception` :
+To add a game or a renderer, implement `IGame` or `IGraphic` and export the two C entry points the loader looks for:
 
 ```cpp
-class Error : public std::exception {
-private:
-    std::string message;
-public:
-    Error(std::string const& error = "Error");
-    virtual const char *what() const throw();
-    virtual ~Error() throw() {};
-};
+extern "C" {
+    IGame *create() { return new MyGame(); }
+    void destroy(IGame *game) { delete game; }
+}
 ```
 
-**Utilisation :**
-- Validation des arguments de ligne de commande
-- Vérification de l'existence des bibliothèques
-- Gestion des erreurs de chargement dynamique
+Then add a build rule in the `Makefile`. Note that the core currently uses hard-coded library paths in `src/main.cpp` and `src/IDisplay.cpp`, so you must register the new path there too.
 
-## Ressources et Assets
+## Tests
 
-### Images (PNG)
-- `apple.png` : Sprite de la pomme/nourriture
-- `player.png` : Sprite du joueur/serpent
-- `wall.png` : Sprite des murs
-- `background.png` : Arrière-plan
-- `image_arcade.png` : Logo/image du menu
+The repository has no automated tests.
 
-### Cartes de Jeu
-- `snake.txt` : Niveau pour Snake
-- `nibbler.txt` : Niveau pour Nibbler
+## Author
 
-**Format des cartes :**
-- `#` : Mur
-- `o` : Nourriture
-- ` ` : Espace vide
-
-### Police
-- `font.ttf` : Police utilisée pour l'affichage du texte
-
-## Conclusion
-
-Ce projet Arcade démontre une architecture modulaire robuste utilisant :
-- **Polymorphisme** via les interfaces abstraites
-- **Chargement dynamique** pour la modularité
-- **Séparation des responsabilités** entre rendu et logique
-- **Extensibilité** pour ajouter de nouveaux jeux/bibliothèques
-
-L'architecture permet d'ajouter facilement de nouvelles bibliothèques graphiques ou de nouveaux jeux en implémentant simplement les interfaces correspondantes.
+- Andy Sagbo ([@andysags](https://github.com/andysags))
